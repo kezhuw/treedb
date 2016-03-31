@@ -1,0 +1,88 @@
+syntax = "proto3";
+
+package protocol;
+
+// empty response used to indicate OK.
+message OkResponse {
+}
+
+message ErrorResponse {
+    uint32 code                 = 1;
+    string info                 = 2;
+}
+
+message OpenDBRequest {
+    string name                 = 1;
+    string template             = 2;
+    bool create_if_missing      = 3;
+    bool error_if_exists        = 4;
+}
+
+message OpenDBResponse {
+    uint32 db                   = 1;
+    uint64 version              = 2;
+}
+
+message CloseDBRequest {
+    uint32 db                   = 1;
+}
+
+message ListDBRequest {
+}
+
+message ListDBResponse {
+    // name to version
+    map<string, uint32> databases   = 1;
+}
+
+message DeleteDBRequest {
+    string name                 = 1;
+}
+
+message GetRequest {
+    uint32 db                   = 1;
+    string path                 = 2;
+
+    // protocol.FieldAny;
+    // protocol.FieldTree;
+    // protocol.FieldBinary.
+    uint32 type                 = 3;
+}
+
+message GetResponse {
+    // protocol.Marshaled
+    bytes value                 = 1;
+}
+
+message SetRequest {
+    uint32 db                   = 1;
+    string path                 = 2;
+    // protocol.Marshaled
+    bytes value                 = 3;
+}
+
+message DeleteRequest {
+    uint32 db                   = 1;
+    string path                 = 2;
+}
+
+message TouchRequest {
+    uint32 db                   = 1;
+    string path                 = 2;
+}
+
+message CacheRequest {
+    uint32 db                   = 1;
+    string path                 = 2;
+    // -2, never cached indirectly;
+    // -1, deleted;
+    //  0, default timeout duration;
+    //  positive, timeout duration.
+    sint64 timeout              = 3;
+}
+
+message OptionRequest {
+    uint32 db                   = 1;
+    string name                 = 2;
+    string value                = 3;
+}
