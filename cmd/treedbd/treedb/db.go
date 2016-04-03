@@ -211,10 +211,17 @@ func (db *DB) getCacheRoot() *cache.Tree {
 	return (*cache.Tree)(atomic.LoadPointer(addr))
 }
 
-func (db *DB) getSnapshot() chan interface{} {
+func (db *DB) getSnapshot() (leveldb.Snapshot, error) {
 	reply := make(chan interface{}, 1)
 	db.Request(reply, (*snapshotCommand)(nil))
-	return reply
+	switch result := (<-reply).(type) {
+	case error:
+		return nil, result
+	case leveldb.Snapshot:
+		return result, nil
+	default:
+		panic("unexpected result for getSnapshot()")
+	}
 }
 
 func (db *DB) releaseSnapshot(ss leveldb.Snapshot) {

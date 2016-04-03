@@ -131,7 +131,7 @@ func (d *Directory) openTemplate(e *entry, from string, e1 *entry, name string, 
 	}
 	e.db = db
 	e.Unlock()
-	d.cloneEntry(db, db.getSnapshot(), e1, name, opts, reply)
+	d.cloneEntry(db, e1, name, opts, reply)
 }
 
 func replyCreation(reply chan interface{}, db *DB, err error, err1 error) {
@@ -145,16 +145,16 @@ func replyCreation(reply chan interface{}, db *DB, err error, err1 error) {
 	}
 }
 
-func (d *Directory) cloneEntry(db *DB, ssReply chan interface{}, e *entry, name string, opts *OpenOptions, reply chan interface{}) {
+func (d *Directory) cloneEntry(from *DB, e *entry, name string, opts *OpenOptions, reply chan interface{}) {
 	defer d.zero.Done()
 	defer e.Unlock()
-	result := <-ssReply
-	if err, ok := result.(error); ok {
+	ss, err := from.getSnapshot()
+	if err != nil {
 		reply <- err
 		return
 	}
-	opts.snapshot = result.(leveldb.Snapshot)
-	defer db.releaseSnapshot(opts.snapshot)
+	defer from.releaseSnapshot(ss)
+	opts.snapshot = ss
 	db, err := openDB(name, opts)
 	e.db = db
 	replyCreation(reply, db, err, opts.err)
@@ -241,7 +241,7 @@ func (d *Directory) clone(name string, opts *OpenOptions, reply chan interface{}
 		go d.openTemplate(e0, opts.TemplateDB, e1, name, opts, reply)
 	default:
 		e0.Unlock()
-		go d.cloneEntry(db, db.getSnapshot(), e1, name, opts, reply)
+		go d.cloneEntry(db, e1, name, opts, reply)
 	}
 }
 
