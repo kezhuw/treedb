@@ -29,7 +29,7 @@ func (c *collector) Collect(db *DB) {
 			log.Printf("database[%s] fail to parse tree id from gc key[%s]: %s", db.Name, key, err)
 			continue
 		}
-		ok := c.collectTree(db, ss.Dup(), id)
+		ok := c.collectTree(db, ss, id)
 		if ok {
 			c.batch.Delete(key)
 		}
