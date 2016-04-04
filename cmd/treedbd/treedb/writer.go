@@ -23,6 +23,8 @@ type writer struct {
 	Memory    int
 	Snapshots []leveldb.Snapshot
 
+	TreeGC bool
+
 	ubuf [binary.MaxVarintLen64 + 1]byte
 	kbuf bytes.Buffer
 	vbuf bytes.Buffer
@@ -50,6 +52,7 @@ func (w *writer) RewriteBinary(value []byte) {
 }
 
 func (w *writer) DeleteTree(t *tree.Tree) {
+	w.TreeGC = true
 	w.Put(w.keyfBuf("$gc.tree.%d", t.ID), []byte{})
 	t.Lock()
 	var pendings []*tree.Tree

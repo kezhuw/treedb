@@ -5,6 +5,8 @@ import (
 	"fmt"
 )
 
+var zeroBytes = []byte{}
+
 func dupBytes(src []byte) []byte {
 	return append([]byte(nil), src...)
 }

@@ -53,6 +53,9 @@ type DB struct {
 	}
 	memStat *stat.Memory
 
+	gcing  chan struct{}
+	gcdone chan struct{}
+
 	version Version
 	storage *leveldb.DB
 }
@@ -195,6 +198,8 @@ func newDB(name string, treeId uint64, cacheRoot *cache.Tree, cachePaths map[str
 		readonly: readonly,
 		storage:  storage,
 		requests: make(chan request, 500),
+		gcing:    make(chan struct{}, 1),
+		gcdone:   make(chan struct{}),
 	}
 	db.caches.root = cacheRoot
 	db.caches.paths = cachePaths
@@ -203,6 +208,12 @@ func newDB(name string, treeId uint64, cacheRoot *cache.Tree, cachePaths map[str
 	db.memStat.Start()
 	runtime.SetFinalizer(db, (*DB).finalize)
 	go db.serve()
+	switch readonly {
+	case true:
+		close(db.gcdone)
+	default:
+		go db.gc()
+	}
 	return db
 }
 
@@ -236,7 +247,9 @@ func (db *DB) Close() error {
 	done := make(chan interface{})
 	db.Request(done, (*closeCommand)(nil))
 	<-done
+	close(db.gcing)
 	db.memStat.Stop()
+	<-db.gcdone
 	db.root = nil
 	db.caches.root = nil
 	db.memStat = nil
@@ -269,6 +282,12 @@ func (db *DB) commit(w *writer) error {
 	db.addMemory(w.Memory)
 	for _, ss := range w.Snapshots {
 		ss.Close()
+	}
+	if w.TreeGC {
+		select {
+		default:
+		case db.gcing <- struct{}{}:
+		}
 	}
 	return nil
 }
@@ -380,6 +399,29 @@ func (db *DB) serve() {
 			req.Reply <- ss
 		default:
 			req.Reply <- ErrUnknownCommand
+		}
+	}
+}
+
+func (db *DB) gc() {
+	defer close(db.gcdone)
+	timeout := 5 * time.Minute
+	gcing := db.gcing
+	for {
+		select {
+		case _, ok := <-gcing:
+			if !ok {
+				return
+			}
+		case <-time.After(timeout):
+		}
+		var c collector
+		c.Collect(db)
+		switch c.Remains {
+		case true:
+			timeout = 1 * time.Minute
+		default:
+			timeout = 5 * time.Minute
 		}
 	}
 }
