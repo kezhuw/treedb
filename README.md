@@ -9,12 +9,12 @@ years development in game server scenarios. What hit me often is memory cache.
 
 The primary reason to use memory cache is performance. Today, performance promotion benefits from
 scenario insensitive cache used in disk oriented databases is far behind requirement. Memory cache
-systems are adopted to alleviate database load. Hence boilerplates existed in many projects to handle
+systems are adopted to alleviate database load. Hence boilerplates exists in many projects to handle
 the similar situations: cache missings, cache loadings, cache consistence, and data writebacks.
 Full memory databases, such as Redis, suffers from other problems: costs and capacities.
 
 Things complicates things. The origin problem is that cache policy used by disk oriented databases
-leads to little performance promotion. Why not give some hits to cache facility? This leads me to
+results in little performance promotion. Why not give some hits to cache facility? This leads me to
 create TreeDB.
 
 ## First look
