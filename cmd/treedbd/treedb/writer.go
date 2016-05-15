@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/kezhuw/leveldb"
 	"github.com/kezhuw/treedb/cmd/treedbd/treedb/internal/cache"
-	"github.com/kezhuw/treedb/cmd/treedbd/treedb/internal/leveldb"
 	"github.com/kezhuw/treedb/cmd/treedbd/treedb/internal/tree"
 )
 
@@ -21,7 +21,7 @@ type writer struct {
 
 	Now       time.Time
 	Memory    int
-	Snapshots []leveldb.Snapshot
+	Snapshots []*leveldb.Snapshot
 
 	TreeGC bool
 
@@ -38,7 +38,7 @@ func (w *writer) addMemory(n int) {
 	w.Memory += n
 }
 
-func (w *writer) addSnapshot(ss leveldb.Snapshot) {
+func (w *writer) addSnapshot(ss *leveldb.Snapshot) {
 	w.Snapshots = append(w.Snapshots, ss)
 }
 

@@ -7,7 +7,7 @@ import (
 	"log"
 	"strconv"
 
-	"github.com/kezhuw/treedb/cmd/treedbd/treedb/internal/leveldb"
+	"github.com/kezhuw/leveldb"
 )
 
 type collector struct {
@@ -18,7 +18,7 @@ type collector struct {
 
 func (c *collector) Collect(db *DB) {
 	_, ss := db.latestVersion()
-	defer ss.Close()
+	defer ss.Release()
 	prefix := []byte("$gc.tree.")
 	it := ss.Prefix(prefix, nil)
 	defer it.Release()
@@ -34,18 +34,18 @@ func (c *collector) Collect(db *DB) {
 			c.batch.Delete(key)
 		}
 	}
-	if err := it.Error(); err != nil {
+	if err := it.Err(); err != nil {
 		log.Printf("database[%s] fail to iterate gc keys: %s", db.Name, err)
 		return
 	}
-	if err := db.storage.Write(&c.batch, nil); err != nil {
+	if err := db.storage.Write(c.batch, nil); err != nil {
 		log.Printf("database[%s] fail to write gc batch: %s", db.Name, err)
 		return
 	}
 	db.commitVersion()
 }
 
-func (c *collector) collectTree(db *DB, ss leveldb.Snapshot, id uint64) bool {
+func (c *collector) collectTree(db *DB, ss *leveldb.Snapshot, id uint64) bool {
 	c.buf.Reset()
 	fmt.Fprintf(&c.buf, "/tree/%d/", id)
 	prefix := c.buf.Bytes()

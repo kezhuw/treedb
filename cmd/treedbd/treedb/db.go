@@ -14,8 +14,8 @@ import (
 	"unsafe"
 
 	"github.com/kezhuw/guard"
+	"github.com/kezhuw/leveldb"
 	"github.com/kezhuw/treedb/cmd/treedbd/treedb/internal/cache"
-	"github.com/kezhuw/treedb/cmd/treedbd/treedb/internal/leveldb"
 	"github.com/kezhuw/treedb/cmd/treedbd/treedb/internal/stat"
 	"github.com/kezhuw/treedb/cmd/treedbd/treedb/internal/tree"
 )
@@ -90,7 +90,7 @@ func readMaxTreeId(storage *leveldb.DB) (uint64, error) {
 		}
 		return id, nil
 	}
-	return 0, it.Error()
+	return 0, it.Err()
 }
 
 func readCachedTimeout(value []byte) (int64, error) {
@@ -104,8 +104,8 @@ func readCachedTimeout(value []byte) (int64, error) {
 	return timeout, nil
 }
 
-func readCachedPaths(ss leveldb.Snapshot) (map[string]int64, error) {
-	defer ss.Close()
+func readCachedPaths(ss *leveldb.Snapshot) (map[string]int64, error) {
+	defer ss.Release()
 	prefix := []byte("$cache.paths.")
 	it := ss.Prefix(prefix, nil)
 	defer it.Release()
@@ -118,13 +118,13 @@ func readCachedPaths(ss leveldb.Snapshot) (map[string]int64, error) {
 		path := string(it.Key()[len(prefix):])
 		paths[path] = timeout
 	}
-	return paths, it.Error()
+	return paths, it.Err()
 }
 
 func openDB(name string, opts *OpenOptions) (db *DB, err error) {
 	var options leveldb.Options
-	options.ReadOnly = opts.readonly
-	options.ErrorIfMissing = !opts.CreateIfMissing
+	// options.ReadOnly = opts.readonly
+	options.CreateIfMissing = opts.CreateIfMissing
 	storage, err := leveldb.Open(name, &options)
 	if err != nil {
 		return nil, err
@@ -183,7 +183,7 @@ func openDB(name string, opts *OpenOptions) (db *DB, err error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := storage.Write(&batch.batch, nil); err != nil {
+		if err := storage.Write(batch.batch, nil); err != nil {
 			return nil, err
 		}
 		return newDB(name, batch.treeId, caches, batch.caches, opts.readonly, storage), nil
@@ -222,21 +222,21 @@ func (db *DB) getCacheRoot() *cache.Tree {
 	return (*cache.Tree)(atomic.LoadPointer(addr))
 }
 
-func (db *DB) getSnapshot() (leveldb.Snapshot, error) {
+func (db *DB) getSnapshot() (*leveldb.Snapshot, error) {
 	reply := make(chan interface{}, 1)
 	db.Request(reply, (*snapshotCommand)(nil))
 	switch result := (<-reply).(type) {
 	case error:
 		return nil, result
-	case leveldb.Snapshot:
+	case *leveldb.Snapshot:
 		return result, nil
 	default:
 		panic("unexpected result for getSnapshot()")
 	}
 }
 
-func (db *DB) releaseSnapshot(ss leveldb.Snapshot) {
-	ss.Close()
+func (db *DB) releaseSnapshot(ss *leveldb.Snapshot) {
+	ss.Release()
 	db.reads.Done()
 }
 
@@ -264,24 +264,24 @@ func (db *DB) addMemory(n int) {
 	db.memStat.Add(n)
 }
 
-func (db *DB) commitVersion() (uint64, leveldb.Snapshot) {
+func (db *DB) commitVersion() (uint64, *leveldb.Snapshot) {
 	snapshot := db.storage.GetSnapshot()
 	version := db.version.Commit(snapshot)
 	db.memStat.Update()
 	return version, snapshot.Dup()
 }
 
-func (db *DB) latestVersion() (uint64, leveldb.Snapshot) {
+func (db *DB) latestVersion() (uint64, *leveldb.Snapshot) {
 	return db.version.Latest()
 }
 
 func (db *DB) commit(w *writer) error {
-	if err := db.storage.Write(&w.Batch, nil); err != nil {
+	if err := db.storage.Write(w.Batch, nil); err != nil {
 		return err
 	}
 	db.addMemory(w.Memory)
 	for _, ss := range w.Snapshots {
-		ss.Close()
+		ss.Release()
 	}
 	if w.TreeGC {
 		select {
@@ -366,7 +366,7 @@ func (db *DB) handleCacheCommand(l guard.Locker, reply chan interface{}, cmd *Ca
 		reply <- nil
 		return
 	}
-	if err := db.storage.Write(&batch, nil); err != nil {
+	if err := db.storage.Write(batch, nil); err != nil {
 		reply <- err
 		return
 	}

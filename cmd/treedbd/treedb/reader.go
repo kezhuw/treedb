@@ -7,8 +7,8 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/kezhuw/leveldb"
 	"github.com/kezhuw/treedb/cmd/treedbd/treedb/internal/cache"
-	"github.com/kezhuw/treedb/cmd/treedbd/treedb/internal/leveldb"
 	"github.com/kezhuw/treedb/cmd/treedbd/treedb/internal/tree"
 )
 
@@ -28,7 +28,7 @@ func (r *reader) kprintf(format string, args ...interface{}) []byte {
 	return r.kbuf.Bytes()
 }
 
-func (r *reader) readFullTree(ss leveldb.Snapshot, t *tree.Tree, c cache.Node) (map[string]interface{}, error) {
+func (r *reader) readFullTree(ss *leveldb.Snapshot, t *tree.Tree, c cache.Node) (map[string]interface{}, error) {
 	n := len(t.Fields)
 	keys := make([]keyField, 0, n)
 	for k, f := range t.Fields {
@@ -52,10 +52,10 @@ func (r *reader) readFullTree(ss leveldb.Snapshot, t *tree.Tree, c cache.Node) (
 	return m, nil
 }
 
-func (r *reader) readField(ss leveldb.Snapshot, id tree.ID, k string, f *tree.Field, c cache.Node) (interface{}, error) {
+func (r *reader) readField(ss *leveldb.Snapshot, id tree.ID, k string, f *tree.Field, c cache.Node) (interface{}, error) {
 	if f.Snapshot != nil {
 		ss = f.Snapshot.Dup()
-		defer ss.Close()
+		defer ss.Release()
 	}
 	switch v := f.Value.(type) {
 	case nil:
@@ -80,7 +80,7 @@ func (r *reader) readField(ss leveldb.Snapshot, id tree.ID, k string, f *tree.Fi
 	}
 }
 
-func (r *reader) readDiskField(ss leveldb.Snapshot, id tree.ID, key string) (interface{}, error) {
+func (r *reader) readDiskField(ss *leveldb.Snapshot, id tree.ID, key string) (interface{}, error) {
 	value, err := ss.Get(r.kprintf("/tree/%d/%s", id, key), nil)
 	switch {
 	case err == leveldb.ErrNotFound:
@@ -92,7 +92,7 @@ func (r *reader) readDiskField(ss leveldb.Snapshot, id tree.ID, key string) (int
 	}
 }
 
-func (r *reader) readDiskValue(ss leveldb.Snapshot, value []byte) (interface{}, error) {
+func (r *reader) readDiskValue(ss *leveldb.Snapshot, value []byte) (interface{}, error) {
 	switch {
 	case len(value) == 0:
 		return nil, ErrCorruptedData
@@ -109,7 +109,7 @@ func (r *reader) readDiskValue(ss leveldb.Snapshot, value []byte) (interface{}, 
 	}
 }
 
-func (r *reader) readDiskTree(ss leveldb.Snapshot, id tree.ID) (map[string]interface{}, error) {
+func (r *reader) readDiskTree(ss *leveldb.Snapshot, id tree.ID) (map[string]interface{}, error) {
 	prefix := r.kprintf("/tree/%d/", id)
 	it := ss.Prefix(prefix, nil)
 	defer it.Release()
@@ -122,10 +122,10 @@ func (r *reader) readDiskTree(ss leveldb.Snapshot, id tree.ID) (map[string]inter
 		}
 		m[string(it.Key()[prefixLen:])] = value
 	}
-	return m, it.Error()
+	return m, it.Err()
 }
 
-func (r *reader) readPartialTree(ss leveldb.Snapshot, t *tree.Tree, c cache.Node) (map[string]interface{}, error) {
+func (r *reader) readPartialTree(ss *leveldb.Snapshot, t *tree.Tree, c cache.Node) (map[string]interface{}, error) {
 	n := len(t.Fields)
 	keys := make(map[string]*tree.Field, n)
 	defer unlockReadingFields(keys)
@@ -164,7 +164,7 @@ func (r *reader) readPartialTree(ss leveldb.Snapshot, t *tree.Tree, c cache.Node
 			m[k] = value
 		}
 	}
-	return m, it.Error()
+	return m, it.Err()
 }
 
 func unlockReadingFields(keys map[string]*tree.Field) {
@@ -173,7 +173,7 @@ func unlockReadingFields(keys map[string]*tree.Field) {
 	}
 }
 
-func (r *reader) ReadTree(ss leveldb.Snapshot, t *tree.Tree, c cache.Node) (map[string]interface{}, error) {
+func (r *reader) ReadTree(ss *leveldb.Snapshot, t *tree.Tree, c cache.Node) (map[string]interface{}, error) {
 	switch {
 	case t.Full:
 		return r.readFullTree(ss, t, c)

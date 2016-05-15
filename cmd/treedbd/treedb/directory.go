@@ -6,8 +6,8 @@ import (
 	"sync"
 	"unsafe"
 
+	"github.com/kezhuw/leveldb"
 	"github.com/kezhuw/treedb/cmd/treedbd/treedb/internal/filer"
-	"github.com/kezhuw/treedb/cmd/treedbd/treedb/internal/leveldb"
 )
 
 var (
@@ -89,7 +89,7 @@ type OpenOptions struct {
 	CreateIfMissing bool
 	ErrorIfExists   bool
 	readonly        bool
-	snapshot        leveldb.Snapshot
+	snapshot        *leveldb.Snapshot
 	err             error
 }
 

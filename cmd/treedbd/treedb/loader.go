@@ -6,8 +6,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/kezhuw/leveldb"
 	"github.com/kezhuw/treedb/cmd/treedbd/treedb/internal/cache"
-	"github.com/kezhuw/treedb/cmd/treedbd/treedb/internal/leveldb"
 	"github.com/kezhuw/treedb/cmd/treedbd/treedb/internal/tree"
 )
 
@@ -17,9 +17,9 @@ type loader struct {
 	Memory *int64
 }
 
-func (l *loader) LoadEmptyTree(ss leveldb.Snapshot, c cache.Node, t *tree.Tree) {
+func (l *loader) LoadEmptyTree(ss *leveldb.Snapshot, c cache.Node, t *tree.Tree) {
 	defer l.Wait.Done()
-	defer ss.Close()
+	defer ss.Release()
 	defer t.Unlock()
 	prefix := bprintf("/tree/%d/", t.ID)
 	it := ss.Prefix(prefix, nil)
@@ -43,9 +43,9 @@ func (l *loader) LoadEmptyTree(ss leveldb.Snapshot, c cache.Node, t *tree.Tree) 
 	atomic.AddInt64(l.Memory, int64(memory))
 }
 
-func (l *loader) LoadPartialTree(ss leveldb.Snapshot, c cache.Node, t *tree.Tree) {
+func (l *loader) LoadPartialTree(ss *leveldb.Snapshot, c cache.Node, t *tree.Tree) {
 	defer l.Wait.Done()
-	defer ss.Close()
+	defer ss.Release()
 	defer t.Unlock()
 	prefix := bprintf("/tree/%d/", t.ID)
 	it := ss.Prefix(prefix, nil)
@@ -81,7 +81,7 @@ func (l *loader) LoadPartialTree(ss leveldb.Snapshot, c cache.Node, t *tree.Tree
 	atomic.AddInt64(l.Memory, int64(memory))
 }
 
-func (l *loader) LoadFieldValue(ss leveldb.Snapshot, c cache.Node, value []byte) (interface{}, int, error) {
+func (l *loader) LoadFieldValue(ss *leveldb.Snapshot, c cache.Node, value []byte) (interface{}, int, error) {
 	switch {
 	case len(value) == 0:
 		return nil, 0, ErrCorruptedData

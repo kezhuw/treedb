@@ -10,8 +10,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/kezhuw/leveldb"
 	"github.com/kezhuw/treedb/cmd/treedbd/treedb/internal/cache"
-	"github.com/kezhuw/treedb/cmd/treedbd/treedb/internal/leveldb"
 	"github.com/kezhuw/treedb/cmd/treedbd/treedb/internal/tree"
 )
 
@@ -40,7 +40,7 @@ func (w *walker) Start(callback reflect.Value, reading bool, cmd Command) {
 	go w.handle(callback, reading, ss, db.root, db.getCacheRoot(), cmd)
 }
 
-func (w *walker) handle(callback reflect.Value, reading bool, ss leveldb.Snapshot, t *tree.Tree, c cache.Node, cmd Command) {
+func (w *walker) handle(callback reflect.Value, reading bool, ss *leveldb.Snapshot, t *tree.Tree, c cache.Node, cmd Command) {
 	w.loader.Now = w.Now
 	w.loader.Wait = &w.wait
 	w.loader.Memory = &w.memoryAtomic
@@ -67,7 +67,7 @@ func (w *walker) handle(callback reflect.Value, reading bool, ss leveldb.Snapsho
 	}
 }
 
-func (w *walker) getField(ss leveldb.Snapshot, f *tree.Field, c cache.Node, cmd *GetCommand) {
+func (w *walker) getField(ss *leveldb.Snapshot, f *tree.Field, c cache.Node, cmd *GetCommand) {
 	switch v := f.Value.(type) {
 	case nil:
 		f.Unlock()
@@ -132,7 +132,7 @@ func (w *walker) setField(t *tree.Tree, i int, f *tree.Field, cmd *SetCommand) {
 	w.result = nil
 }
 
-func (w *walker) deleteField(ss leveldb.Snapshot, t *tree.Tree, k string, f *tree.Field, cmd *DeleteCommand) {
+func (w *walker) deleteField(ss *leveldb.Snapshot, t *tree.Tree, k string, f *tree.Field, cmd *DeleteCommand) {
 	var batch writer
 	switch v := f.Value.(type) {
 	default:
@@ -156,9 +156,9 @@ func (w *walker) deleteField(ss leveldb.Snapshot, t *tree.Tree, k string, f *tre
 	w.result = nil
 }
 
-func (w *walker) loadTree(ss leveldb.Snapshot, t *tree.Tree) {
+func (w *walker) loadTree(ss *leveldb.Snapshot, t *tree.Tree) {
 	defer w.wait.Done()
-	defer ss.Close()
+	defer ss.Release()
 	defer t.Unlock()
 	prefix := bprintf("/tree/%d/", t.ID)
 	it := ss.Prefix(prefix, nil)
@@ -196,7 +196,7 @@ func (w *walker) loadTree(ss leveldb.Snapshot, t *tree.Tree) {
 	atomic.AddInt64(&w.memoryAtomic, int64(memory))
 }
 
-func (w *walker) loadField(ss leveldb.Snapshot, id tree.ID, k string, f *tree.Field, c cache.Node) {
+func (w *walker) loadField(ss *leveldb.Snapshot, id tree.ID, k string, f *tree.Field, c cache.Node) {
 	w.buf.Reset()
 	fmt.Fprintf(&w.buf, "/tree/%d/%s", id, k)
 	value, err := ss.Get(w.buf.Bytes(), nil)
@@ -217,8 +217,8 @@ func (w *walker) loadField(ss leveldb.Snapshot, id tree.ID, k string, f *tree.Fi
 
 }
 
-func (w *walker) handleGetCommand(ss leveldb.Snapshot, t *tree.Tree, c cache.Node, cmd *GetCommand) {
-	defer ss.Close()
+func (w *walker) handleGetCommand(ss *leveldb.Snapshot, t *tree.Tree, c cache.Node, cmd *GetCommand) {
+	defer ss.Release()
 	for i, k := range cmd.Path.Segs {
 		c = c.Field(k)
 		f := t.Fields[k]
@@ -237,7 +237,7 @@ func (w *walker) handleGetCommand(ss leveldb.Snapshot, t *tree.Tree, c cache.Nod
 			t.Unlock()
 			if f.Snapshot != nil {
 				ss = f.Snapshot.Dup()
-				defer ss.Close()
+				defer ss.Release()
 			}
 			if f.Value == cache.CollectedObject {
 				w.loadField(ss, t.ID, k, f, c)
@@ -269,8 +269,8 @@ func (w *walker) handleGetCommand(ss leveldb.Snapshot, t *tree.Tree, c cache.Nod
 	}
 }
 
-func (w *walker) handleSetCommand(ss leveldb.Snapshot, t *tree.Tree, c cache.Node, cmd *SetCommand) {
-	defer ss.Close()
+func (w *walker) handleSetCommand(ss *leveldb.Snapshot, t *tree.Tree, c cache.Node, cmd *SetCommand) {
+	defer ss.Release()
 	for i, k := range cmd.Path.Segs {
 		c = c.Field(k)
 		f := t.Fields[k]
@@ -285,7 +285,7 @@ func (w *walker) handleSetCommand(ss leveldb.Snapshot, t *tree.Tree, c cache.Nod
 			t.Unlock()
 			if f.Snapshot != nil {
 				ss = f.Snapshot.Dup()
-				defer ss.Close()
+				defer ss.Release()
 			}
 			if f.Value == cache.CollectedObject {
 				w.loadField(ss, t.ID, k, f, c)
@@ -316,8 +316,8 @@ func (w *walker) handleSetCommand(ss leveldb.Snapshot, t *tree.Tree, c cache.Nod
 	}
 }
 
-func (w *walker) handleDeleteCommand(ss leveldb.Snapshot, t *tree.Tree, c cache.Node, cmd *DeleteCommand) {
-	defer ss.Close()
+func (w *walker) handleDeleteCommand(ss *leveldb.Snapshot, t *tree.Tree, c cache.Node, cmd *DeleteCommand) {
+	defer ss.Release()
 	for i, k := range cmd.Path.Segs {
 		c = c.Field(k)
 		f := t.Fields[k]
@@ -336,7 +336,7 @@ func (w *walker) handleDeleteCommand(ss leveldb.Snapshot, t *tree.Tree, c cache.
 			t.Unlock()
 			if f.Snapshot != nil {
 				ss = f.Snapshot.Dup()
-				defer ss.Close()
+				defer ss.Release()
 			}
 			if f.Value == cache.CollectedObject {
 				w.loadField(ss, t.ID, k, f, c)
@@ -367,8 +367,8 @@ func (w *walker) handleDeleteCommand(ss leveldb.Snapshot, t *tree.Tree, c cache.
 	}
 }
 
-func (w *walker) handleTouchCommand(ss leveldb.Snapshot, t *tree.Tree, c cache.Node, cmd *TouchCommand) {
-	ss.Close()
+func (w *walker) handleTouchCommand(ss *leveldb.Snapshot, t *tree.Tree, c cache.Node, cmd *TouchCommand) {
+	ss.Release()
 	for _, k := range cmd.Path.Segs {
 		f, ok := t.Fields[k]
 		if !ok {

@@ -8,7 +8,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/kezhuw/treedb/cmd/treedbd/treedb/internal/leveldb"
+	"github.com/kezhuw/leveldb"
 	"github.com/kezhuw/treedb/cmd/treedbd/treedb/internal/tree"
 )
 
@@ -201,7 +201,7 @@ func (state *state) reduceMemory(n int) {
 
 func (state *state) releaseSnapshot(f *tree.Field) {
 	if f.Snapshot != nil && f.Version <= state.version {
-		f.Snapshot.Close()
+		f.Snapshot.Release()
 		f.Version, f.Snapshot = 0, nil
 	}
 }
@@ -210,7 +210,7 @@ func (state *state) ScaleTimeout(d time.Duration) time.Duration {
 	return time.Duration(uint64(d) / state.timeScale)
 }
 
-func (state *state) collectVersion(t *tree.Tree, version uint64, snapshot leveldb.Snapshot, size *int) (uint64, leveldb.Snapshot) {
+func (state *state) collectVersion(t *tree.Tree, version uint64, snapshot *leveldb.Snapshot, size *int) (uint64, *leveldb.Snapshot) {
 	t.Lock()
 	defer t.Unlock()
 	for k, f := range t.Fields {
@@ -219,11 +219,11 @@ func (state *state) collectVersion(t *tree.Tree, version uint64, snapshot leveld
 			switch {
 			case f.Version > version:
 				if snapshot != nil {
-					snapshot.Close()
+					snapshot.Release()
 				}
 				version, snapshot = f.Version, f.Snapshot
 			default:
-				f.Snapshot.Close()
+				f.Snapshot.Release()
 			}
 			f.Version, f.Snapshot = 0, nil
 		}

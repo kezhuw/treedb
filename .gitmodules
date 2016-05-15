@@ -1,9 +1,6 @@
 [submodule "github.com/Sirupsen/logrus"]
 	path = vendor/github.com/Sirupsen/logrus
 	url = https://github.com/Sirupsen/logrus.git
-[submodule "github.com/syndtr/goleveldb"]
-	path = vendor/github.com/syndtr/goleveldb
-	url = https://github.com/syndtr/goleveldb.git
 [submodule "github.com/peterh/liner"]
 	path = vendor/github.com/peterh/liner
 	url = https://github.com/peterh/liner.git
@@ -28,3 +25,6 @@
 [submodule "github.com/onsi/gomega"]
 	path = vendor/github.com/onsi/gomega
 	url = https://github.com/onsi/gomega.git
+[submodule "github.com/kezhuw/leveldb"]
+	path = vendor/github.com/kezhuw/leveldb
+	url = https://github.com/kezhuw/leveldb.git

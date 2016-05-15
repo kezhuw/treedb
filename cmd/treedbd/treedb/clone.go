@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/kezhuw/treedb/cmd/treedbd/treedb/internal/leveldb"
+	"github.com/kezhuw/leveldb"
 )
 
 type cloneBatch struct {
@@ -18,7 +18,7 @@ func (b *cloneBatch) WriteDone() {
 	b.batch.Put(doneKey, []byte{})
 }
 
-func (b *cloneBatch) CloneCaches(ss leveldb.Snapshot) error {
+func (b *cloneBatch) CloneCaches(ss *leveldb.Snapshot) error {
 	prefix := []byte("$cache.paths.")
 	it := ss.Prefix(prefix, nil)
 	defer it.Release()
@@ -33,10 +33,10 @@ func (b *cloneBatch) CloneCaches(ss leveldb.Snapshot) error {
 		b.batch.Put(it.Key(), it.Value())
 	}
 	b.caches = caches
-	return it.Error()
+	return it.Err()
 }
 
-func (b *cloneBatch) CloneData(ss leveldb.Snapshot) error {
+func (b *cloneBatch) CloneData(ss *leveldb.Snapshot) error {
 	var buf bytes.Buffer
 	var pendings []uint64
 	var id, max uint64
@@ -58,7 +58,7 @@ func (b *cloneBatch) CloneData(ss leveldb.Snapshot) error {
 			}
 			b.batch.Put(it.Key(), value)
 		}
-		if err := it.Error(); err != nil {
+		if err := it.Err(); err != nil {
 			it.Release()
 			return err
 		}

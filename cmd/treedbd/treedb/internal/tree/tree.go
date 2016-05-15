@@ -5,7 +5,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/kezhuw/treedb/cmd/treedbd/treedb/internal/leveldb"
+	"github.com/kezhuw/leveldb"
 )
 
 const (
@@ -22,7 +22,7 @@ type Field struct {
 	Touch    time.Time
 	Value    interface{}
 	Version  uint64
-	Snapshot leveldb.Snapshot
+	Snapshot *leveldb.Snapshot
 }
 
 type ID uint64
